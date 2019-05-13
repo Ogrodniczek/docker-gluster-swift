@@ -2,8 +2,9 @@ FROM centos:7
 
 RUN yum install -y epel-release
 
-RUN yum install -y liberasurecode-devel yasm supervisor memcached gcc python-devel libffi-devel make autoconf automake libtool zlib-devel redhat-lsb python-pip liberasurecode-devel python-scandir python-prettytable git centos-release-openstack-pike && yum -y clean all
+RUN yum install -y yasm supervisor memcached gcc python-devel libffi-devel make autoconf automake libtool zlib-devel redhat-lsb python-pip liberasurecode-devel python-scandir python-prettytable git centos-release-openstack-pike
 
+RUN yum install -y liberasurecode-devel
 
 RUN pip install --upgrade pip cryptography requests pyparsing
 

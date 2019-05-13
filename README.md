@@ -98,3 +98,10 @@ mount -t glusterfs -o selinux,context="system_u:object_r:svirt_sandbox_file_t:s0
 ### TODO
 
 * Install gluster-swift from RPMs. (Currently installed from source)
+
+
+### Kubespray gluster compatibility:
+
+
+docker build . -t gluster_swift
+docker run -d --volume=/mnt/gluster-object/:/mnt/gluster-object/ -p 8090:8080 -e GLUSTER_VOLUMES=gluster gluster_swift
