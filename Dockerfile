@@ -1,58 +1,60 @@
 FROM centos:7
-MAINTAINER Prashanth Pai <ppai@redhat.com>
 
-# centos-release-openstack-newton package resides in the extras repo.
-# All subsequent actual packages come from the CentOS Cloud SIG repo:
-# http://mirror.centos.org/centos/7/cloud/x86_64/
+RUN yum install -y epel-release
 
-# epel-release is needed to install supervisor.
-# Traditionally a docker container runs a single process when it is launched.
-# When you want to run more than one process in a container, you can use an
-# external process management tool such as the supervisor (supervisord.org)
+RUN yum install -y liberasurecode-devel yasm supervisor memcached gcc python-devel libffi-devel make autoconf automake libtool zlib-devel redhat-lsb python-pip liberasurecode-devel python-scandir python-prettytable git centos-release-openstack-pike && yum -y clean all
 
-# Install PACO servers and S3 middleware.
-# Install supervisor
-# Install gluster-swift dependencies. To be removed when RPMs become available.
-# Clean downloaded packages and index
 
-RUN yum --setopt=tsflags=nodocs -y update && \
-    yum --setopt=tsflags=nodocs -y install \
-        centos-release-openstack-newton \
-        epel-release && \
-    yum --setopt=tsflags=nodocs -y install \
-        openstack-swift openstack-swift-{proxy,account,container,object,plugin-swift3} \
-        supervisor \
-        git memcached python-prettytable && \
-    yum -y clean all
+RUN pip install --upgrade pip cryptography requests pyparsing
 
-# Install gluster-swift from source.
-# TODO: When gluster-swift is shipped as RPM, just use that.
-RUN git clone git://review.gluster.org/gluster-swift /tmp/gluster-swift && \
-    cd /tmp/gluster-swift && \
+RUN git clone https://github.com/openstack/liberasurecode.git && \
+    cd liberasurecode/ && \
+    ./autogen.sh && \
+    ./configure && \
+    make && \
+    make install && \
+    cd - && \
+    rm -rf liberasurecode/ 
+
+RUN git clone https://github.com/openstack/pyeclib.git && \
+    cd pyeclib/ && \
+    pip install -U bindep -r test-requirements.txt && \
+    pip install -r test-requirements.txt && \
+    bindep -f bindep.txt && \
     python setup.py install && \
-    cd -
+    cd - && \
+    rm -rf pyeclib
 
-# Gluster volumes will be mounted *under* this directory.
+
+RUN git clone https://github.com/gluster/gluster-swift; cd gluster-swift && \
+    python setup.py install && \
+    mkdir -p /etc/swift/ && \ 
+    cp etc/* /etc/swift/ && \
+    cd /etc/swift/ && \
+    for tmpl in *.conf-gluster ; do cp ${tmpl} ${tmpl%.*}.conf; done  && \
+    cd - && \
+    cd .. && \
+    rm -rf gluster-swift
+
+
+RUN git clone https://github.com/openstack/swift; cd swift && \
+    git checkout -b release-2.10.1 tags/2.10.1  && \
+    pip install -r test-requirements.txt && \
+    pip install -r ./requirements.txt && \
+    python setup.py install && \
+    cd - && \
+    rm -rf swift 
+
+
 VOLUME /mnt/gluster-object
-
-# Configure supervisord
 RUN mkdir -p /etc/supervisor /var/log/supervisor
 COPY supervisord.conf /etc/supervisor/supervisord.conf
-
-# If any of the processes run by supervisord dies, kill supervisord
-# as well, thus terminating the container.
+COPY swift-start.sh /usr/local/bin/swift-start.sh
+RUN chmod +x /usr/local/bin/swift-start.sh
 COPY supervisor_suicide.py /usr/local/bin/supervisor_suicide.py
 RUN chmod +x /usr/local/bin/supervisor_suicide.py
 
-# Copy script. This will check and generate ring files and will invoke
-# supervisord which starts the required gluster-swift services.
-COPY swift-start.sh /usr/local/bin/swift-start.sh
-RUN chmod +x /usr/local/bin/swift-start.sh
-
-# Replace openstack swift conf files with local gluster-swift ones
-COPY etc/swift/* /etc/swift/
-
-# The proxy server listens on port 8080
-EXPOSE 8080
 
 CMD /usr/local/bin/swift-start.sh
+
+
